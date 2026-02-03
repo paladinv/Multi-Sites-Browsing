@@ -1,0 +1,18 @@
+{
+  "name": "msb",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-Sites Browsing (MSB) lets you split the screen and browse multiple sites at once.",
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.1.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}
