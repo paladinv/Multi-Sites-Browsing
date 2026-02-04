@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const MIN_PANES = 2;
 const MAX_PANES = 4;
@@ -10,6 +10,8 @@ const createPane = (id) => ({
   url: "",
   input: "",
   muted: false,
+  zoom: 1,
+  width: null,
 });
 
 const normalizeUrl = (value) => {
@@ -61,6 +63,19 @@ export default function HomePage() {
   const [panes, setPanes] = useState([]);
   const [reloadToken, setReloadToken] = useState(0);
   const idCounter = useRef(1);
+  const gridRef = useRef(null);
+
+  useEffect(() => {
+    if (!paneCount || !gridRef.current) return;
+    const gap = 18;
+    const totalWidth = gridRef.current.clientWidth;
+    if (!totalWidth) return;
+    const available = totalWidth - gap * (paneCount - 1);
+    const baseWidth = Math.max(280, Math.floor(available / paneCount));
+    setPanes((prev) =>
+      prev.map((pane) => (pane.width ? pane : { ...pane, width: baseWidth }))
+    );
+  }, [paneCount, panes.length]);
 
   const activeCount = paneCount ?? 0;
 
@@ -107,6 +122,51 @@ export default function HomePage() {
     );
   };
 
+  const adjustZoom = (id, delta) => {
+    setPanes((prev) =>
+      prev.map((pane) => {
+        if (pane.id !== id) return pane;
+        const next = Math.min(2, Math.max(0.5, Number((pane.zoom + delta).toFixed(2))));
+        return { ...pane, zoom: next };
+      })
+    );
+  };
+
+  const resetZoom = (id) => {
+    updatePane(id, { zoom: 1 });
+  };
+
+  const openInNewTab = (url) => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const startResize = (id, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const pane = panes.find((item) => item.id === id);
+    if (!pane) return;
+    const startX = event.clientX;
+    const startWidth =
+      pane.width ||
+      event.currentTarget.closest(".panel")?.getBoundingClientRect().width ||
+      320;
+
+    const onMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = Math.max(260, Math.round(startWidth + delta));
+      updatePane(id, { width: nextWidth });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
     <div>
       {!paneCount && (
@@ -133,20 +193,26 @@ export default function HomePage() {
             <ul>
               <li>Vertical splits from 2 to 4 panels.</li>
               <li>Quick URL entry per panel.</li>
+              <li>Drag panel edges to resize each screen.</li>
               <li>Close and reflow panels instantly.</li>
               <li>Per-panel mute toggles.</li>
+              <li>Per-panel zoom controls.</li>
             </ul>
           </div>
         </section>
       )}
 
       {paneCount && (
-        <section className={gridClass}>
+        <section className={gridClass} ref={gridRef}>
           {panes.map((pane) => {
             const src = getMutedUrl(pane.url, pane.muted);
             const muteHint = pane.muted ? muteSupportHint(pane.url) : "";
             return (
-              <div key={`${pane.id}-${reloadToken}-${pane.muted}`} className="panel">
+              <div
+                key={`${pane.id}-${reloadToken}-${pane.muted}`}
+                className="panel"
+                style={pane.width ? { width: `${pane.width}px` } : undefined}
+              >
                 <form className="panel-header" onSubmit={(event) => handleSubmit(event, pane.id)}>
                   <input
                     className="url-input"
@@ -158,6 +224,14 @@ export default function HomePage() {
                   <button className="action-btn" type="submit">
                     Go
                   </button>
+                  <button
+                    className="action-btn"
+                    type="button"
+                    onClick={() => openInNewTab(pane.url)}
+                    disabled={!pane.url}
+                  >
+                    Open
+                  </button>
                   <button className="action-btn" type="button" onClick={() => toggleMute(pane.id)}>
                     {pane.muted ? "Unmute" : "Mute"}
                   </button>
@@ -166,21 +240,54 @@ export default function HomePage() {
                   </button>
                   {pane.muted && <span className="muted-indicator">Muted</span>}
                 </form>
+                <div className="panel-zoom">
+                  <span className="zoom-label">Zoom</span>
+                  <button className="zoom-btn" type="button" onClick={() => adjustZoom(pane.id, -0.1)}>
+                    -
+                  </button>
+                  <button className="zoom-btn" type="button" onClick={() => resetZoom(pane.id)}>
+                    {Math.round(pane.zoom * 100)}%
+                  </button>
+                  <button className="zoom-btn" type="button" onClick={() => adjustZoom(pane.id, 0.1)}>
+                    +
+                  </button>
+                </div>
                 <div className="panel-body">
                   {pane.url ? (
-                    <iframe
-                      key={`${pane.id}-${reloadToken}-${pane.muted}`}
-                      className="iframe"
-                      title={`panel-${pane.id}`}
-                      src={src}
-                      allow="autoplay; encrypted-media; picture-in-picture"
-                      referrerPolicy="no-referrer"
-                    />
+                    <div className="iframe-wrap">
+                      <div
+                        className="iframe-zoom"
+                        style={{
+                          transform: `scale(${pane.zoom})`,
+                          width: `${100 / pane.zoom}%`,
+                          height: `${100 / pane.zoom}%`,
+                        }}
+                      >
+                        <iframe
+                          key={`${pane.id}-${reloadToken}-${pane.muted}`}
+                          className="iframe"
+                          title={`panel-${pane.id}`}
+                          src={src}
+                          allow="autoplay; encrypted-media; picture-in-picture"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div className="panel-placeholder">Add a URL to load this panel.</div>
                   )}
                 </div>
-                {muteHint && <div className="mute-note">{muteHint}</div>}
+                <div className="panel-footer">
+                  <span>
+                    If a site blocks embedding, use <strong>Open</strong> to launch it in a new tab.
+                  </span>
+                  {muteHint && <span className="mute-note">{muteHint}</span>}
+                </div>
+                <div
+                  className="panel-resizer"
+                  role="presentation"
+                  onPointerDown={(event) => startResize(pane.id, event)}
+                />
               </div>
             );
           })}
