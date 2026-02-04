@@ -133,6 +133,7 @@ export default function HomePage() {
             <ul>
               <li>Vertical splits from 2 to 4 panels.</li>
               <li>Quick URL entry per panel.</li>
+              <li>Drag panel edges to resize each screen.</li>
               <li>Close and reflow panels instantly.</li>
               <li>Per-panel mute toggles.</li>
             </ul>
